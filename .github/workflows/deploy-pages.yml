@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - arena/e2a6cc02-melkino
+      - 'arena/**'
   workflow_dispatch:
 
 permissions:
@@ -33,6 +33,8 @@ jobs:
         run: npm test
       - name: Build frontend and API
         run: npm run build:all
+        env:
+          VITE_PUBLIC_LANDING: 'true'
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload static site

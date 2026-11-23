@@ -9,6 +9,7 @@ import { exportPropertiesCsv, type Property, type PropertyDraft } from './domain
 import { apiRequest, authProblemMessage, backendConfigured, defaultBranchId, mapProperty, supabase, type ApiProperty, type PropertyWrite } from './lib/backend';
 import type { Session } from '@supabase/supabase-js';
 import { LoginScreen, NoticeScreen, SetupScreen } from './components/AppGate';
+import { LandingPage } from './components/LandingPage';
 import { CustomersPage } from './components/CustomersPage';
 import { CustomerForm } from './components/CustomerForm';
 import { mapCustomer, type CustomerDraft, type CustomerRecord, type CustomerView } from './domain/customers';
@@ -205,4 +206,5 @@ function ModulePage({view,properties,allProperties,query,setQuery,filter,setFilt
  return <><div className="module-title-row"><div><div className="eyebrow"><span className="live-dot"/> پنل مدیریت آژانس</div><h1>{label}</h1><p>{info[view]?.desc}</p></div></div><div className="module-placeholder-grid"><div className="module-placeholder panel"><span className="module-icon"><Icon size={24}/></span><h2>{label}، یکپارچه در ملکینو</h2><p>این ماژول هنوز پیاده‌سازی نشده است؛ در این صفحه داده نمونه نمایش داده نمی‌شود.</p><div className="placeholder-callout"><Sparkles size={17}/><span>ماژول عملیاتی این بخش هنوز پیاده‌سازی نشده است.</span></div></div><div className="module-side panel"><div className="side-card-head"><span className="stat-icon green"><Activity size={18}/></span><span className="muted-text">وضعیت ماژول</span></div><b className="module-status">در حال توسعه</b><span className="module-sub">این قابلیت هنوز فعال نشده است.</span><div className="mini-divider"/><div className="side-card-head"><span className="stat-icon blue"><ShieldCheck size={18}/></span><span className="muted-text">حریم خصوصی</span></div><b className="module-status small-status">بدون داده نمایشی</b><span className="module-sub">این بخش تا زمان پیاده‌سازی هیچ داده‌ای نمایش نمی‌دهد.</span></div></div><div className="footer-note"><span>ملکینو <i/> سیستم مدیریت هوشمند املاک</span><span>نسخه رابط کاربری اولیه <span className="sync-dot"/></span></div></>
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+const publicLanding=import.meta.env.VITE_PUBLIC_LANDING==='true';
+createRoot(document.getElementById('root')!).render(publicLanding?<LandingPage/>:<React.StrictMode><App/></React.StrictMode>);
