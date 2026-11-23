@@ -1,6 +1,6 @@
 # پیش‌نمایش ملکینو روی GitHub Pages
 
-با هر push به `main` یا شاخهٔ فعال `arena/e2a6cc02-melkino`، GitHub Actions تست‌ها و build را اجرا کرده و محتوای `dist/` را روی GitHub Pages منتشر می‌کند. اجرای دستی workflow نیز از بخش Actions ممکن است.
+با هر push به `main` یا شاخهٔ فعال `arena/e2a6cc02-melkino`، GitHub Actions تست‌ها و build را اجرا می‌کند. فقط push به `main` محتوای `dist/` را روی GitHub Pages منتشر می‌کند؛ push شاخهٔ PR برای build/test است. اجرای دستی workflow نیز از بخش Actions ممکن است. تنظیم فعلی Environment مخزن، انتشار را به `main` محدود کرده است؛ بنابراین URL عمومی پس از merge شدن PR به‌روزرسانی می‌شود.
 
 نشانی Pages مخزن: <https://rahmaniho.github.io/Melkino/>
 
