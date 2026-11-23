@@ -1,9 +1,17 @@
-import { ArrowLeft, ArrowUpLeft, Building2, CalendarCheck2, Check, ClipboardList, LockKeyhole, MapPin, Users } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, ArrowUpLeft, Building2, CalendarCheck2, Check, ClipboardList, LockKeyhole, MapPin, Users, LayoutDashboard } from 'lucide-react';
 import './landing.css';
 
 const base = import.meta.env.BASE_URL;
+const productScreens=[
+  {title:'نمای کلی آژانس',description:'چیدمان صفحهٔ دید کلی و خلاصهٔ بخش‌های اصلی محصول.',image:'melkino-preview-dashboard.png',Icon:LayoutDashboard},
+  {title:'فایل‌های املاک',description:'نمایی از جست‌وجو، فیلترها و جدول مدیریت فایل.',image:'melkino-preview-properties.png',Icon:Building2},
+  {title:'مشتریان و پیگیری',description:'نمایی از فضای CRM و برنامه‌ریزی تماس و بازدید.',image:'melkino-preview-crm.png',Icon:CalendarCheck2},
+];
 
 export function LandingPage(){
+  const [activeScreen,setActiveScreen]=useState(0);
+  const screen=productScreens[activeScreen];
   return <main className="landing" dir="rtl">
     <header className="landing-nav">
       <a href="#home" className="landing-brand" aria-label="ملکینو، خانه"><img className="landing-brand-mark" src={`${base}assets/melkino-app-icon.png`} alt=""/><span className="landing-brand-copy"><b>ملکینو</b><small>مدیریت هوشمند املاک</small></span></a>
@@ -37,6 +45,15 @@ export function LandingPage(){
     </section>
 
     <div className="landing-ribbon"><span>سامانهٔ مدیریت املاک ملکینو</span><i/><span>فایلینگ</span><i/><span>CRM مشتریان</span><i/><span>پیگیری‌های زمان‌بندی‌شده</span><i/><span>چندشعبه‌ای</span></div>
+
+    <section className="landing-section product-screens-section" id="screens">
+      <div className="section-intro"><span className="landing-kicker"><i/> فضای کاری ملکینو</span><h2>محیط برنامه را ببینید</h2><p>تصاویر مفهومی از سه بخش اصلی رابط؛ برای معرفی چیدمان، نه نمایش اطلاعات عملیاتی.</p></div>
+      <div className="screen-showcase">
+        <div className="screen-tabs" role="tablist" aria-label="بخش‌های محیط برنامه">{productScreens.map((item,index)=><button key={item.image} type="button" id={`screen-tab-${index}`} role="tab" aria-controls="product-screen-panel" aria-selected={activeScreen===index} tabIndex={activeScreen===index?0:-1} className={activeScreen===index?'active':''} onClick={()=>setActiveScreen(index)} onKeyDown={event=>{let next=activeScreen;if(event.key==='ArrowLeft')next=(activeScreen+1)%productScreens.length;else if(event.key==='ArrowRight')next=(activeScreen+productScreens.length-1)%productScreens.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=productScreens.length-1;else return;event.preventDefault();setActiveScreen(next);document.getElementById(`screen-tab-${next}`)?.focus();}}><item.Icon size={16}/><span>{item.title}</span></button>)}</div>
+        <figure className="screen-figure" id="product-screen-panel" role="tabpanel" aria-labelledby={`screen-tab-${activeScreen}`} aria-live="polite"><div className="screen-image-wrap"><img key={screen.image} src={`${base}assets/${screen.image}`} alt={`تصویر مفهومی محیط ملکینو: ${screen.title}`} loading="lazy"/><span className="screen-image-badge"><i/> تصویر مفهومی رابط</span></div><figcaption><span><b>{screen.title}</b><small>{screen.description}</small></span><span className="screen-counter">۰{activeScreen+1} <i/> ۰۳</span></figcaption></figure>
+        <p className="screen-disclaimer">این تصاویر برای نمایش بصری طراحی تولید شده‌اند؛ دادهٔ داخل آن‌ها واقعی نیست و این صفحه به سامانهٔ آژانس متصل نیست.</p>
+      </div>
+    </section>
 
     <section className="landing-section features-section" id="features">
       <div className="section-intro"><span className="landing-kicker"><i/> یک مسیر پیوسته برای کار آژانس</span><h2>ابزارهایی برای نظمِ کار روزانه</h2><p>از اطلاعات ملک و نیاز مشتری تا گام بعدی ارتباط؛ قابلیت‌ها در کنار هم طراحی شده‌اند تا کارها پراکنده نمانند.</p></div>
