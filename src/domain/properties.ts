@@ -13,6 +13,7 @@ export type Property = {
   agent: string;
   date: string;
   id?: string;
+  branchId?: string;
   currency?: string;
   transaction?: string;
   salePrice?: string | null;

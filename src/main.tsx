@@ -134,7 +134,8 @@ function App(){
     if(!session||savingFollowUp)return false;setSavingFollowUp(true);
     try{
       const dueAt=new Date(draft.dueAt);if(!Number.isFinite(dueAt.getTime()))throw new Error('زمان پیگیری معتبر نیست.');
-      const body={branchId:defaultBranchId,customerId:draft.customerId,propertyId:draft.propertyId||undefined,title:draft.title.trim(),kind:draft.kind,dueAt:dueAt.toISOString(),details:draft.details.trim()||undefined};
+      const customer=customers.find(item=>item.id===draft.customerId&&item.status!=='ARCHIVED');if(!customer)throw new Error('مشتری انتخاب‌شده در دسترس نیست.');
+      const body={branchId:customer.branchId,customerId:draft.customerId,propertyId:draft.propertyId||undefined,title:draft.title.trim(),kind:draft.kind,dueAt:dueAt.toISOString(),details:draft.details.trim()||undefined};
       await apiRequest<FollowUpRecord>('/follow-ups',session,{method:'POST',body:JSON.stringify(body)});
       await refreshFollowUps(session);notify('پیگیری در برنامه ثبت شد');return true;
     }catch(error){notify(error instanceof Error?error.message:'ثبت پیگیری ناموفق بود.',true);return false}finally{setSavingFollowUp(false)}

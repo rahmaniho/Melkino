@@ -17,6 +17,7 @@ export const supabase: SupabaseClient | null = supabaseUrl && supabaseAnonKey
 
 export type ApiProperty = {
   id: string;
+  branchId: string;
   code: string;
   title: string;
   address: string;
@@ -95,6 +96,7 @@ export function mapProperty(row: ApiProperty, currentUserId?: string, currentUse
   const typeNames = { APARTMENT: 'آپارتمان', VILLA: 'ویلا', LAND: 'زمین', COMMERCIAL: 'تجاری', OFFICE: 'اداری', OTHER: 'سایر' } as const;
   return {
     id: row.id,
+    branchId: row.branchId,
     code: row.code,
     title: row.title,
     area: row.address,

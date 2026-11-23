@@ -2,6 +2,7 @@ export type CustomerKind = 'BUYER' | 'SELLER' | 'TENANT' | 'LANDLORD' | 'OTHER';
 export type CustomerStatus = 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'CLOSED' | 'ARCHIVED';
 export type CustomerRecord = {
   id: string;
+  branchId: string;
   code: string;
   fullName: string;
   phone: string;

@@ -3,6 +3,7 @@ import { mapProperty, type ApiProperty } from './backend';
 
 const record: ApiProperty = {
   id: '11111111-1111-4111-8111-111111111111',
+  branchId: '33333333-3333-4333-8333-333333333333',
   code: 'ML-A1',
   title: 'آپارتمان تست',
   address: 'تهران، زعفرانیه',
@@ -24,6 +25,7 @@ describe('API property adapter', () => {
     const mapped = mapProperty(record, record.assignedTo, 'مشاور جاری');
     expect(mapped).toMatchObject({
       id: record.id,
+      branchId: record.branchId,
       code: 'ML-A1',
       area: 'تهران، زعفرانیه',
       size: 125.5,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { customerTelHref, exportCustomersCsv, mapCustomer, type CustomerRecord } from './customers';
 
 const customer: CustomerRecord = {
-  id: '11111111-1111-4111-8111-111111111111', code: 'CU-123', fullName: 'مریم رضایی', phone: '09121234567', email: null,
+  id: '11111111-1111-4111-8111-111111111111', branchId: '33333333-3333-4333-8333-333333333333', code: 'CU-123', fullName: 'مریم رضایی', phone: '09121234567', email: null,
   kind: 'BUYER', targetTransaction: 'SALE', preferredPropertyType: 'APARTMENT', budgetMin: '10000000000', budgetMax: '90000000000',
   currency: 'IRT', preferredArea: 'زعفرانیه', notes: null, status: 'NEW', assignedTo: '22222222-2222-4222-8222-222222222222',
   createdAt: '2026-11-22T10:00:00.000Z', archivedAt: null,
