@@ -1,3 +1,20 @@
+# ملکینو — سامانه مدیریت املاک
+
+این مخزن اکنون شامل رابط فارسی RTL، ورود Supabase Auth به‌صورت پیکربندی‌پذیر و ماژول فایلینگ متصل به API NestJS/PostgreSQL است. دادهٔ دمو یا fallback محلی در اجرای برنامه نمایش داده نمی‌شود؛ بدون تنظیمات معتبر، برنامه صفحهٔ راه‌اندازی نشان می‌دهد.
+
+- راهنمای استقرار روی cPanel: [`docs/CPANEL_DEPLOYMENT.md`](docs/CPANEL_DEPLOYMENT.md)
+- راهنمای API و محدودیت‌های محیط: [`api/README.md`](api/README.md)
+- تنظیمات لازم در نمونه: [`.env.example`](.env.example)
+- پیش از production هنوز باید Supabase و دیتابیس اختصاصی ملکینو صریحاً انتخاب و پیکربندی شوند؛ migration روی دیتابیس واقعی اجرا نشده است.
+
+```bash
+npm ci
+npm test
+npm run build:all
+```
+
+---
+
 MASTER EXECUTION PROMPT
 
 ENTERPRISE REAL ESTATE MANAGEMENT PLATFORM
@@ -895,3 +912,36 @@ NOT A COLLECTION OF MOCK SCREENS.
 اول Audit، سپس معماری، سپس توسعه مرحله‌ای، سپس تست و انتشار.
 
 KarenSoft — Intelligence in Every Operation.
+
+---
+
+## رابط کاربری اولیه ملکینو
+
+برای اجرای پیش‌نمایش رابط کاربری:
+
+```bash
+npm install
+npm run dev
+```
+
+برای بررسی ساخت Production:
+
+```bash
+npm run build
+```
+
+رابط فارسی/RTL در صورت پیکربندی به Supabase Auth و API متصل می‌شود و دادهٔ نمونه/localStorage را نمایش یا ذخیره نمی‌کند. فایلینگ، CRM مشتریان و پیگیری‌های تماس/جلسه/بازدید/یادآوری در کد به API متصل‌اند؛ معاملات، مالی و گزارش‌ها عملیاتی نیستند. بدون متغیرهای محیطی لازم، برنامه صفحهٔ راه‌اندازی نشان می‌دهد. DB اختصاصی ملکینو هنوز انتخاب نشده، بنابراین migration واقعی اجرا یا استقرار cPanel انجام نشده است؛ اعلان خودکار و تقویم کامل نیز هنوز فعال نیستند.
+
+### وضعیت توسعهٔ فایلینگ
+
+جریان فایلینگ پیاده‌سازی‌شده از API برای بارگذاری و ذخیرهٔ فایل، تغییر وضعیت، بایگانی/بازگردانی و CSV استفاده می‌کند؛ تصویر داده‌ها فقط پس از ورود و پیکربندی env نمایش داده می‌شود. دیتابیس واقعی هنوز انتخاب نشده است؛ بنابراین migration روی آن اجرا نشده و هیچ پروژهٔ Supabase نامرتبطی تغییر نکرده است. جزئیات در `docs/EXECUTION_PROMPT_PROPERTIES.md` و `api/README.md` آمده.
+
+### زیربنای API (آمادهٔ اتصال؛ هنوز اجرا/متصل نشده)
+
+```bash
+cp .env.example .env   # مقدارهای واقعی فقط در env محلی/مدیریت اسرار
+npm run db:migrate    # فقط پس از انتخاب DB اختصاصی ملکینو و بازبینی migration
+npm run api:dev
+```
+
+API در NestJS با Drizzle/PostgreSQL مسیرهای فایلینگ نسخهٔ v1، اعتبارسنجی server-side، Supabase JWT/JWKS، عضویت tenant/branch و RLS دارد. UI فایلینگ در صورت تنظیم env از این API استفاده می‌کند. Migration در PGlite تست شده، نه روی DB ملکینو واقعی؛ شرایط استقرار cPanel در `docs/CPANEL_DEPLOYMENT.md` و محدودیت‌های نقش DB در `api/README.md` ثبت شده‌اند.

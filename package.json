@@ -1,0 +1,50 @@
+{
+  "name": "melkino-real-estate-os",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "api:dev": "tsx watch api/src/main.ts",
+    "api:build": "tsc -p api/tsconfig.json",
+    "api:start": "node api/dist/main.js",
+    "db:migrate": "tsx api/src/database/migrate.ts",
+    "build:all": "npm run build && npm run api:build"
+  },
+  "dependencies": {
+    "@fontsource/vazirmatn": "^5.2.6",
+    "@nestjs/common": "^11.2.11",
+    "@nestjs/core": "^11.2.11",
+    "@nestjs/platform-express": "^11.2.11",
+    "@supabase/supabase-js": "^2.119.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "dotenv": "^18.0.10",
+    "drizzle-orm": "^0.45.4",
+    "express-rate-limit": "^8.7.5",
+    "helmet": "^8.3.0",
+    "jose": "^6.2.18",
+    "lucide-react": "^0.468.0",
+    "pg": "^8.23.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "vite": "^6.0.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.6.2",
+    "vitest": "^5.1.1"
+  }
+}
