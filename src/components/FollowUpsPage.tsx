@@ -46,9 +46,10 @@ function FollowUpForm({customers,properties,initialCustomerId,busy,onClose,onSav
  const change=(key:keyof FollowUpDraft,value:string)=>setDraft(current=>({...current,[key]:value}));
  const submit=(event:FormEvent)=>{event.preventDefault();void onSave(draft)};
  const activeCustomers=customers.filter(customer=>customer.status!=='ARCHIVED');
- const activeProperties=properties.filter(property=>property.status!=='بایگانی');
+ const selectedCustomer=activeCustomers.find(customer=>customer.id===draft.customerId);
+ const activeProperties=properties.filter(property=>property.status!=='بایگانی'&&property.branchId===selectedCustomer?.branchId);
  return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)onClose()}}><form className="modal followup-form" role="dialog" aria-modal="true" aria-labelledby="followup-form-title" onSubmit={submit}><div className="modal-head"><div><span className="eyebrow">برنامه‌ریزی ارتباط</span><h2 id="followup-form-title">ثبت پیگیری جدید</h2><p>پیگیری به نام کاربر واردشده ثبت می‌شود.</p></div><button type="button" className="icon-button" disabled={busy} aria-label="بستن فرم" onClick={onClose}><X size={19}/></button></div><div className="form-grid">
- <label className="field full">مشتری<select required value={draft.customerId} onChange={event=>change('customerId',event.target.value)}><option value="">انتخاب مشتری</option>{activeCustomers.map(customer=><option key={customer.id} value={customer.id}>{customer.fullName} — {customer.phone}</option>)}</select></label>
+ <label className="field full">مشتری<select required value={draft.customerId} onChange={event=>setDraft(current=>({...current,customerId:event.target.value,propertyId:''}))}><option value="">انتخاب مشتری</option>{activeCustomers.map(customer=><option key={customer.id} value={customer.id}>{customer.fullName} — {customer.phone}</option>)}</select></label>
  <label className="field">نوع پیگیری<select value={draft.kind} onChange={event=>change('kind',event.target.value)}><option value="CALL">تماس</option><option value="MEETING">جلسه</option><option value="PROPERTY_VISIT">بازدید ملک</option><option value="REMINDER">یادآوری</option></select></label>
  <label className="field">زمان پیگیری<input type="datetime-local" required value={draft.dueAt} onChange={event=>change('dueAt',event.target.value)}/></label>
  <label className="field full">عنوان<input required maxLength={160} value={draft.title} onChange={event=>change('title',event.target.value)} placeholder="مثلاً هماهنگی بازدید و دریافت بازخورد"/></label>
