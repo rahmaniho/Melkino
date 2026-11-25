@@ -34,7 +34,7 @@ jobs:
       - name: Build frontend and API
         run: npm run build:all
         env:
-          VITE_PUBLIC_LANDING: 'true'
+          VITE_LOCAL_MODE: 'true'
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload static site

@@ -7,5 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_DEFAULT_BRANCH_ID?: string;
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_PUBLIC_LANDING?: string;
+  readonly VITE_LOCAL_MODE?: string;
 }
 interface ImportMeta { readonly env: ImportMetaEnv; }

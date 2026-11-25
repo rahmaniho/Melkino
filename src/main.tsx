@@ -20,6 +20,11 @@ import { ReportsPage } from './components/ReportsPage';
 import { TransactionsPage } from './components/TransactionsPage';
 import { mapFollowUp, type FollowUpRecord, type FollowUpView } from './domain/follow-ups';
 import {
+  LOCAL_BRANCH_ID, LOCAL_USER_ID, LOCAL_USER_NAME, makeLocalCustomerRecord,
+  makeLocalId, makeLocalProperty, readLocalCustomers, readLocalFollowUps, readLocalProperties,
+  writeLocalCustomers, writeLocalFollowUps, writeLocalProperties,
+} from './domain/local-workspace';
+import {
   Activity, ArrowDownLeft, ArrowLeft, ArrowUpLeft, ArrowUpRight, Bell, Building2, CalendarDays,
   Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Command, FileText, Filter,
   Home, LayoutDashboard, LogOut, MapPin, Menu, MessageCircle, MoreHorizontal, Plus, Search, CalendarClock,
@@ -36,11 +41,14 @@ const fa = (n:number) => new Intl.NumberFormat('fa-IR').format(n);
 const titleToView:Record<string,string> = {'نمای کلی':'dashboard','فایل‌های املاک':'properties','مشتریان و سرنخ‌ها':'customers','معاملات':'transactions','تقویم و پیگیری':'calendar','مالی و کمیسیون':'finance','گزارش‌ها':'reports','اسناد و قراردادها':'documents'};
 
 function App(){
+  const localMode=import.meta.env.VITE_LOCAL_MODE==='true';
   const [view,setView]=useState('dashboard');
   const [properties,setProperties]=useState<Property[]>([]);
   const [customers,setCustomers]=useState<CustomerView[]>([]); const [loadingCustomers,setLoadingCustomers]=useState(false); const [customerModal,setCustomerModal]=useState(false); const [editingCustomer,setEditingCustomer]=useState<CustomerView|null>(null); const [savingCustomer,setSavingCustomer]=useState(false);
   const [followUps,setFollowUps]=useState<FollowUpView[]>([]);const [loadingFollowUps,setLoadingFollowUps]=useState(false);const [savingFollowUp,setSavingFollowUp]=useState(false);const [followUpCustomerId,setFollowUpCustomerId]=useState('');const [followUpError,setFollowUpError]=useState('');
-  const [session,setSession]=useState<Session|null>(null); const [authReady,setAuthReady]=useState(false); const [loadingProperties,setLoadingProperties]=useState(false); const [backendError,setBackendError]=useState(''); const [apiConnection,setApiConnection]=useState<'checking'|'connected'|'failed'>('checking');
+  const [session,setSession]=useState<Session|null>(null); const [authReady,setAuthReady]=useState(false); const [loadingProperties,setLoadingProperties]=useState(false); const [backendError,setBackendError]=useState(''); const [apiConnection,setApiConnection]=useState<'checking'|'connected'|'failed'|'local'>('checking');
+  const currentUserId=localMode?LOCAL_USER_ID:session?.user.id??'';
+  const currentUserName=localMode?LOCAL_USER_NAME:String(session?.user.user_metadata?.full_name||session?.user.email||'کاربر');
   const [loginEmail,setLoginEmail]=useState(''); const [loginPassword,setLoginPassword]=useState(''); const [authBusy,setAuthBusy]=useState(false); const [authError,setAuthError]=useState('');
   const [query,setQuery]=useState(''); const [modal,setModal]=useState(false); const [mobileNav,setMobileNav]=useState(false);
   const [toast,setToast]=useState(''); const [toastIsError,setToastIsError]=useState(false); const [savingProperty,setSavingProperty]=useState(false); const [filter,setFilter]=useState('همه فایل‌ها');
@@ -48,15 +56,17 @@ function App(){
   const [form,setForm]=useState<PropertyDraft>(emptyDraft); const [editingCode,setEditingCode]=useState<string|null>(null);
   useEffect(()=>{const handleShortcut=(event:KeyboardEvent)=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();document.getElementById('global-search')?.focus()}};window.addEventListener('keydown',handleShortcut);return()=>window.removeEventListener('keydown',handleShortcut)},[]);
   useEffect(()=>{
-    if(!supabase){setAuthReady(true);return}
+    if(localMode||!supabase){setAuthReady(true);return}
     let alive=true;
     void supabase.auth.getSession().then(({data})=>{if(alive){setSession(data.session);setAuthReady(true)}}).catch(()=>{if(alive)setAuthReady(true)});
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,next)=>{setSession(next);setAuthReady(true)});
     return()=>{alive=false;subscription.unsubscribe()}
   },[]);
-  const refreshProperties=async(activeSession:Session)=>{
-    setLoadingProperties(true);setBackendError('');setApiConnection('checking');
+  const refreshProperties=async(activeSession:Session|null=session)=>{
+    setLoadingProperties(true);setBackendError('');setApiConnection(localMode?'local':'checking');
     try{
+      if(localMode){setProperties(readLocalProperties(window.localStorage));return}
+      if(!activeSession){setProperties([]);return}
       const rows:ApiProperty[]=[]; let offset=0; let hasMore=true;
       while(hasMore){const page=await apiRequest<{data:ApiProperty[];pagination:{hasMore:boolean}}>('/properties?includeArchived=true&limit=100&offset='+offset,activeSession);rows.push(...page.data);hasMore=page.pagination.hasMore;offset+=page.data.length}
       const userName=String(activeSession.user.user_metadata?.full_name||activeSession.user.email||'کاربر');
@@ -64,9 +74,11 @@ function App(){
     }catch(error){setApiConnection('failed');setBackendError(error instanceof Error?error.message:'دریافت فایل‌ها ناموفق بود.');}
     finally{setLoadingProperties(false)}
   };
-  const refreshCustomers=async(activeSession:Session)=>{
-    setLoadingCustomers(true);setBackendError('');setApiConnection('checking');
+  const refreshCustomers=async(activeSession:Session|null=session)=>{
+    setLoadingCustomers(true);setBackendError('');setApiConnection(localMode?'local':'checking');
     try{
+      if(localMode){setCustomers(readLocalCustomers(window.localStorage).map(record=>mapCustomer(record,LOCAL_USER_ID,LOCAL_USER_NAME)));return}
+      if(!activeSession){setCustomers([]);return}
       const rows:CustomerRecord[]=[];let offset=0;let hasMore=true;
       while(hasMore){const page=await apiRequest<{data:CustomerRecord[];pagination:{hasMore:boolean}}>(`/customers?includeArchived=true&limit=100&offset=${offset}`,activeSession);rows.push(...page.data);hasMore=page.pagination.hasMore;offset+=page.data.length}
       const userName=String(activeSession.user.user_metadata?.full_name||activeSession.user.email||'کاربر');
@@ -74,10 +86,12 @@ function App(){
     }catch(error){setApiConnection('failed');setBackendError(error instanceof Error?error.message:'دریافت مشتریان ناموفق بود.');}
     finally{setLoadingCustomers(false)}
   };
-  useEffect(()=>{if(session&&backendConfigured)void refreshProperties(session);else setProperties([])},[session]);
-  const refreshFollowUps=async(activeSession:Session)=>{
-    setLoadingFollowUps(true);setFollowUpError('');setApiConnection('checking');
+  useEffect(()=>{if(localMode){void refreshProperties(null);return}if(session&&backendConfigured)void refreshProperties(session);else setProperties([])},[session]);
+  const refreshFollowUps=async(activeSession:Session|null=session)=>{
+    setLoadingFollowUps(true);setFollowUpError('');setApiConnection(localMode?'local':'checking');
     try{
+      if(localMode){setFollowUps(readLocalFollowUps(window.localStorage).map(record=>mapFollowUp(record,LOCAL_USER_ID,LOCAL_USER_NAME)));return}
+      if(!activeSession){setFollowUps([]);return}
       const rows:FollowUpRecord[]=[];let offset=0;let hasMore=true;
       while(hasMore){const page=await apiRequest<{data:FollowUpRecord[];pagination:{hasMore:boolean}}>(`/follow-ups?limit=100&offset=${offset}`,activeSession);rows.push(...page.data);hasMore=page.pagination.hasMore;offset+=page.data.length}
       const userName=String(activeSession.user.user_metadata?.full_name||activeSession.user.email||'کاربر');
@@ -85,10 +99,10 @@ function App(){
     }catch(error){setApiConnection('failed');setFollowUpError(error instanceof Error?error.message:'دریافت پیگیری‌ها ناموفق بود.');}
     finally{setLoadingFollowUps(false)}
   };
-  const refreshDashboard=()=>{if(!session)return;void refreshProperties(session);void refreshFollowUps(session)};
-  const refreshCurrentView=()=>{if(!session)return;if(view==='customers')void refreshCustomers(session);else if(view==='calendar'){void refreshCustomers(session);void refreshFollowUps(session)}else if(view==='reports'){void refreshProperties(session);void refreshCustomers(session);void refreshFollowUps(session)}else if(view==='documents'||view==='finance'||view==='transactions'){void refreshProperties(session);void refreshCustomers(session)}else refreshDashboard()};
-  useEffect(()=>{if(session&&backendConfigured&&['customers','calendar','reports','finance','documents','transactions'].includes(view))void refreshCustomers(session)},[session,view]);
-  useEffect(()=>{if(session&&backendConfigured&&['dashboard','calendar','reports'].includes(view))void refreshFollowUps(session)},[session,view]);
+  const refreshDashboard=()=>{if(localMode){void refreshProperties(null);void refreshFollowUps(null);return}if(!session)return;void refreshProperties(session);void refreshFollowUps(session)};
+  const refreshCurrentView=()=>{if(localMode){if(view==='customers')void refreshCustomers(null);else if(view==='calendar'){void refreshCustomers(null);void refreshFollowUps(null)}else if(view==='reports'){void refreshProperties(null);void refreshCustomers(null);void refreshFollowUps(null)}else if(['documents','finance','transactions'].includes(view)){void refreshProperties(null);void refreshCustomers(null)}else refreshDashboard();return}if(!session)return;if(view==='customers')void refreshCustomers(session);else if(view==='calendar'){void refreshCustomers(session);void refreshFollowUps(session)}else if(view==='reports'){void refreshProperties(session);void refreshCustomers(session);void refreshFollowUps(session)}else if(view==='documents'||view==='finance'||view==='transactions'){void refreshProperties(session);void refreshCustomers(session)}else refreshDashboard()};
+  useEffect(()=>{if(localMode&&['customers','calendar','reports','finance','documents','transactions'].includes(view))void refreshCustomers(null);else if(session&&backendConfigured&&['customers','calendar','reports','finance','documents','transactions'].includes(view))void refreshCustomers(session)},[session,view]);
+  useEffect(()=>{if(localMode&&['dashboard','calendar','reports'].includes(view))void refreshFollowUps(null);else if(session&&backendConfigured&&['dashboard','calendar','reports'].includes(view))void refreshFollowUps(session)},[session,view]);
   const notify=(msg:string,isError=false)=>{setToast(msg);setToastIsError(isError);window.setTimeout(()=>setToast(''),3500)};
   const signIn=async(e:React.FormEvent)=>{e.preventDefault();if(!supabase)return;setAuthBusy(true);setAuthError('');try{const {error}=await supabase.auth.signInWithPassword({email:loginEmail.trim(),password:loginPassword});if(error)throw error;}catch(error){setAuthError(authProblemMessage(error instanceof Error?error.message:''))}finally{setAuthBusy(false)}};
   const signOut=async()=>{if(!supabase)return;await supabase.auth.signOut();setProperties([])};
@@ -99,7 +113,7 @@ function App(){
   const asLatin=(value:string)=>value.replace(/[۰-۹٠-٩]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)>=0?'۰۱۲۳۴۵۶۷۸۹'.indexOf(d):'٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
   const makeWriteBody=():PropertyWrite=>{
     const transaction=(form.transaction||'SALE') as PropertyWrite['transaction'];
-    const body:PropertyWrite={branchId:defaultBranchId,title:form.title.trim(),address:form.area.trim(),type:(form.type||'APARTMENT') as PropertyWrite['type'],transaction,areaSqm:asLatin(form.size.trim()),bedrooms:Number(asLatin(form.beds||'0')),currency:(form.currency||'IRT') as PropertyWrite['currency']};
+    const body:PropertyWrite={branchId:localMode?LOCAL_BRANCH_ID:defaultBranchId,title:form.title.trim(),address:form.area.trim(),type:(form.type||'APARTMENT') as PropertyWrite['type'],transaction,areaSqm:asLatin(form.size.trim()).replace(/[٬,\s]/g,''),bedrooms:Number(asLatin(form.beds||'0')),currency:(form.currency||'IRT') as PropertyWrite['currency']};
     const amount=(text:string)=>asLatin(text.trim()).replace(/[٬,\s]/g,'');
     if(transaction==='SALE')body.salePrice=amount(form.price);
     if(transaction==='RENT')body.monthlyRent=amount(form.monthlyRent||form.price);
@@ -107,55 +121,87 @@ function App(){
     if(editingCode&&form.status)body.status=form.status as ApiProperty['status'];
     return body;
   };
-  const saveProperty=async(e:React.FormEvent)=>{e.preventDefault();if(!session||savingProperty)return;setSavingProperty(true);
+  const saveProperty=async(e:React.FormEvent)=>{e.preventDefault();if((!localMode&&!session)||savingProperty)return;setSavingProperty(true);
     try{
       const body=makeWriteBody();
-      if(!body.title||!body.address||!body.areaSqm||!Number.isFinite(body.bedrooms))throw new Error('عنوان، نشانی و متراژ را کامل وارد کنید.');
-      if(body.transaction==='SALE'&&!body.salePrice)throw new Error('قیمت فروش را وارد کنید.');
-      if(body.transaction==='RENT'&&!body.monthlyRent)throw new Error('اجاره ماهانه را وارد کنید.');
-      if(body.transaction==='MORTGAGE_RENT'&&(!body.deposit||!body.monthlyRent))throw new Error('مبلغ ودیعه و اجاره ماهانه را وارد کنید.');
-      await apiRequest<ApiProperty>(editingCode?`/properties/${editingCode}`:'/properties',session,{method:editingCode?'PATCH':'POST',body:JSON.stringify(body)});
-      await refreshProperties(session);setForm(emptyDraft);setEditingCode(null);setModal(false);setView('properties');notify(editingCode?'تغییرات فایل ملک ذخیره شد':'فایل ملک با موفقیت ثبت شد');
+      if(!body.title||!body.address||!body.areaSqm||!Number.isFinite(Number(body.areaSqm))||Number(body.areaSqm)<=0||!Number.isInteger(body.bedrooms)||body.bedrooms<0||body.bedrooms>30)throw new Error('عنوان، نشانی، متراژ و تعداد اتاق را درست وارد کنید.');
+      const validAmount=(value?:string)=>Boolean(value&&/^\d+$/.test(value)&&BigInt(value)>0n);
+      if(body.transaction==='SALE'&&!validAmount(body.salePrice))throw new Error('قیمت فروش را به‌صورت عدد صحیح بیشتر از صفر وارد کنید.');
+      if(body.transaction==='RENT'&&!validAmount(body.monthlyRent))throw new Error('اجاره ماهانه را به‌صورت عدد صحیح بیشتر از صفر وارد کنید.');
+      if(body.transaction==='MORTGAGE_RENT'&&(!validAmount(body.deposit)||!validAmount(body.monthlyRent)))throw new Error('مبلغ ودیعه و اجاره ماهانه را به‌صورت عدد صحیح بیشتر از صفر وارد کنید.');
+      if(localMode){
+        const generated=makeLocalProperty(body,properties);
+        let next:Property[];
+        if(editingCode){const previous=properties.find(property=>property.id===editingCode);if(!previous)throw new Error('فایل ملک پیدا نشد.');next=properties.map(property=>property.id===editingCode?{...generated,id:previous.id,code:previous.code,createdAt:previous.createdAt,date:previous.date}:property)}
+        else next=[generated,...properties];
+        writeLocalProperties(window.localStorage,next);setProperties(next);setApiConnection('local');
+      }else{
+        if(!session)return;
+        await apiRequest<ApiProperty>(editingCode?`/properties/${editingCode}`:'/properties',session,{method:editingCode?'PATCH':'POST',body:JSON.stringify(body)});
+        await refreshProperties(session);
+      }
+      setForm(emptyDraft);setEditingCode(null);setModal(false);setView('properties');notify(editingCode?'تغییرات فایل ملک ذخیره شد':'فایل ملک با موفقیت ثبت شد');
     }catch(error){notify(error instanceof Error?error.message:'ذخیره فایل ناموفق بود. دوباره تلاش کنید.',true)}finally{setSavingProperty(false)}
   };
-  const toggleArchive=async(id:string,archive:boolean)=>{if(!session)return;try{await apiRequest(`/properties/${id}/${archive?'archive':'restore'}`,session,{method:'POST'});await refreshProperties(session);notify(archive?'فایل به بایگانی منتقل شد':'فایل از بایگانی بازگردانده شد')}catch(error){notify(error instanceof Error?error.message:'عملیات انجام نشد',true)}};
+  const toggleArchive=async(id:string,archive:boolean)=>{
+    if(localMode){try{const target=properties.find(property=>property.id===id||property.code===id);if(!target)throw new Error('فایل ملک پیدا نشد.');const next=properties.map(property=>{
+      if(property.id!==target.id)return property;
+      if(archive&&property.status!=='بایگانی')return {...property,archivedFromStatus:property.status,status:'بایگانی'};
+      if(!archive&&property.status==='بایگانی')return {...property,status:property.archivedFromStatus||'فعال',archivedFromStatus:undefined};
+      return property;
+    });writeLocalProperties(window.localStorage,next);setProperties(next);notify(archive?'فایل به بایگانی منتقل شد':'فایل از بایگانی بازگردانده شد')}catch(error){notify(error instanceof Error?error.message:'عملیات انجام نشد',true)}return}
+    if(!session)return;try{await apiRequest(`/properties/${id}/${archive?'archive':'restore'}`,session,{method:'POST'});await refreshProperties(session);notify(archive?'فایل به بایگانی منتقل شد':'فایل از بایگانی بازگردانده شد')}catch(error){notify(error instanceof Error?error.message:'عملیات انجام نشد',true)}};
   const openNewCustomer=()=>{setEditingCustomer(null);setCustomerModal(true)};
   const saveCustomer=async(draft:CustomerDraft)=>{
-    if(!session||savingCustomer)return;setSavingCustomer(true);
+    if((!localMode&&!session)||savingCustomer)return;setSavingCustomer(true);
     try{
       const toAmount=(value:string)=>asLatin(value.trim()).replace(/[٬,\s]/g,'');
       const body:Record<string,unknown>={fullName:draft.fullName.trim(),phone:asLatin(draft.phone.trim()),email:draft.email.trim()||null,kind:draft.kind,currency:draft.currency,budgetMin:draft.budgetMin.trim()?toAmount(draft.budgetMin):null,budgetMax:draft.budgetMax.trim()?toAmount(draft.budgetMax):null,targetTransaction:draft.targetTransaction||null,preferredPropertyType:draft.preferredPropertyType||null,preferredArea:draft.preferredArea.trim()||null,notes:draft.notes.trim()||null};
-      if(editingCustomer)body.status=draft.status;else body.branchId=defaultBranchId;
+      if(editingCustomer)body.status=draft.status;else body.branchId=localMode?LOCAL_BRANCH_ID:defaultBranchId;
       if(body.budgetMin&&body.budgetMax&&BigInt(String(body.budgetMin))>BigInt(String(body.budgetMax)))throw new Error('حداقل بودجه نباید از حداکثر بودجه بیشتر باشد.');
-      await apiRequest<CustomerRecord>(editingCustomer?`/customers/${editingCustomer.id}`:'/customers',session,{method:editingCustomer?'PATCH':'POST',body:JSON.stringify(body)});
-      await refreshCustomers(session);setCustomerModal(false);setEditingCustomer(null);notify(editingCustomer?'اطلاعات مشتری به‌روز شد':'مشتری در سامانه ثبت شد');
+      if(localMode){
+        const existing=readLocalCustomers(window.localStorage);const prior=editingCustomer?existing.find(record=>record.id===editingCustomer.id):undefined;
+        if(editingCustomer&&!prior)throw new Error('پرونده مشتری پیدا نشد.');
+        const record=makeLocalCustomerRecord({fullName:String(body.fullName),phone:String(body.phone),email:body.email as string|null,kind:draft.kind,
+          targetTransaction:(draft.targetTransaction||null) as CustomerRecord['targetTransaction'],preferredPropertyType:(draft.preferredPropertyType||null) as CustomerRecord['preferredPropertyType'],
+          budgetMin:body.budgetMin as string|null,budgetMax:body.budgetMax as string|null,currency:draft.currency,preferredArea:body.preferredArea as string|null,
+          notes:body.notes as string|null,status:editingCustomer?draft.status:'NEW'},existing,prior);
+        const next=prior?existing.map(item=>item.id===prior.id?record:item):[record,...existing];
+        writeLocalCustomers(window.localStorage,next);setCustomers(next.map(item=>mapCustomer(item,LOCAL_USER_ID,LOCAL_USER_NAME)));setApiConnection('local');
+      }else{
+        if(!session)return;
+        await apiRequest<CustomerRecord>(editingCustomer?`/customers/${editingCustomer.id}`:'/customers',session,{method:editingCustomer?'PATCH':'POST',body:JSON.stringify(body)});
+        await refreshCustomers(session);
+      }
+      setCustomerModal(false);setEditingCustomer(null);notify(editingCustomer?'اطلاعات مشتری به‌روز شد':'مشتری ثبت شد');
     }catch(error){notify(error instanceof Error?error.message:'ذخیره مشتری ناموفق بود.',true)}finally{setSavingCustomer(false)}
   };
   const archiveCustomer=async(customer:CustomerView,archive:boolean)=>{
-    if(!session)return;
-    try{await apiRequest(`/customers/${customer.id}/${archive?'archive':'restore'}`,session,{method:'POST'});await refreshCustomers(session);notify(archive?'مشتری به بایگانی منتقل شد':'مشتری از بایگانی بازگردانده شد')}
+    if(localMode){try{const existing=readLocalCustomers(window.localStorage);const target=existing.find(record=>record.id===customer.id);if(!target)throw new Error('پرونده مشتری پیدا نشد.');const next=existing.map(record=>record.id===customer.id?{...record,status:(archive?'ARCHIVED':(record.status==='ARCHIVED'?'NEW':record.status)) as CustomerRecord['status'],archivedAt:archive?new Date().toISOString():null}:record);writeLocalCustomers(window.localStorage,next);setCustomers(next.map(record=>mapCustomer(record,LOCAL_USER_ID,LOCAL_USER_NAME)));notify(archive?'مشتری به بایگانی منتقل شد':'مشتری از بایگانی بازگردانده شد')}catch(error){notify(error instanceof Error?error.message:'تغییر وضعیت مشتری ناموفق بود.',true)}return}
+    if(!session)return;try{await apiRequest(`/customers/${customer.id}/${archive?'archive':'restore'}`,session,{method:'POST'});await refreshCustomers(session);notify(archive?'مشتری به بایگانی منتقل شد':'مشتری از بایگانی بازگردانده شد')}
     catch(error){notify(error instanceof Error?error.message:'تغییر وضعیت مشتری ناموفق بود.',true)}
   };
   const createFollowUp=async(draft:FollowUpDraft):Promise<boolean>=>{
-    if(!session||savingFollowUp)return false;setSavingFollowUp(true);
+    if((!localMode&&!session)||savingFollowUp)return false;setSavingFollowUp(true);
     try{
       const dueAt=new Date(draft.dueAt);if(!Number.isFinite(dueAt.getTime()))throw new Error('زمان پیگیری معتبر نیست.');
       const customer=customers.find(item=>item.id===draft.customerId&&item.status!=='ARCHIVED');if(!customer)throw new Error('مشتری انتخاب‌شده در دسترس نیست.');
-      const body={branchId:customer.branchId,customerId:draft.customerId,propertyId:draft.propertyId||undefined,title:draft.title.trim(),kind:draft.kind,dueAt:dueAt.toISOString(),details:draft.details.trim()||undefined};
-      await apiRequest<FollowUpRecord>('/follow-ups',session,{method:'POST',body:JSON.stringify(body)});
-      await refreshFollowUps(session);notify('پیگیری در برنامه ثبت شد');return true;
+      const property=properties.find(item=>item.id===draft.propertyId);
+      if(localMode){const existing=readLocalFollowUps(window.localStorage);const record:FollowUpRecord={id:makeLocalId(),code:`F-${String(existing.length+1).padStart(4,'0')}`,title:draft.title.trim(),details:draft.details.trim()||null,kind:draft.kind,status:'OPEN',dueAt:dueAt.toISOString(),completedAt:null,customerId:customer.id,customerName:customer.fullName,customerPhone:customer.phone,propertyId:property?.id??null,propertyCode:property?.code??null,propertyTitle:property?.title??null,assignedTo:LOCAL_USER_ID,createdAt:new Date().toISOString()};if(!record.title)throw new Error('عنوان پیگیری را وارد کنید.');const next=[record,...existing];writeLocalFollowUps(window.localStorage,next);setFollowUps(next.map(item=>mapFollowUp(item,LOCAL_USER_ID,LOCAL_USER_NAME)));setApiConnection('local')}
+      else{if(!session)return false;const body={branchId:customer.branchId,customerId:draft.customerId,propertyId:draft.propertyId||undefined,title:draft.title.trim(),kind:draft.kind,dueAt:dueAt.toISOString(),details:draft.details.trim()||undefined};await apiRequest<FollowUpRecord>('/follow-ups',session,{method:'POST',body:JSON.stringify(body)});await refreshFollowUps(session)}
+      notify('پیگیری ثبت شد');return true;
     }catch(error){notify(error instanceof Error?error.message:'ثبت پیگیری ناموفق بود.',true);return false}finally{setSavingFollowUp(false)}
   };
   const updateFollowUpStatus=async(item:FollowUpView,action:'complete'|'cancel')=>{
-    if(!session)return;
     if(action==='cancel'&&!window.confirm(`پیگیری «${item.title}» لغو شود؟`))return;
-    try{await apiRequest(`/follow-ups/${item.id}/${action}`,session,{method:'POST'});await refreshFollowUps(session);notify(action==='complete'?'پیگیری انجام‌شده ثبت شد':'پیگیری لغو شد')}
+    if(localMode){try{const existing=readLocalFollowUps(window.localStorage);const next=existing.map(record=>record.id===item.id?{...record,status:(action==='complete'?'DONE':'CANCELLED') as FollowUpRecord['status'],completedAt:action==='complete'?new Date().toISOString():null}:record);writeLocalFollowUps(window.localStorage,next);setFollowUps(next.map(record=>mapFollowUp(record,LOCAL_USER_ID,LOCAL_USER_NAME)));notify(action==='complete'?'پیگیری انجام‌شده ثبت شد':'پیگیری لغو شد')}catch(error){notify(error instanceof Error?error.message:'تغییر پیگیری ناموفق بود.',true)}return}
+    if(!session)return;try{await apiRequest(`/follow-ups/${item.id}/${action}`,session,{method:'POST'});await refreshFollowUps(session);notify(action==='complete'?'پیگیری انجام‌شده ثبت شد':'پیگیری لغو شد')}
     catch(error){notify(error instanceof Error?error.message:'تغییر پیگیری ناموفق بود.',true)}
   };
   const exportCsv=(records:Property[])=>{const blob=new Blob([exportPropertiesCsv(records)],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download='melkino-properties.csv';anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);notify('خروجی CSV آماده شد')};
-  if(!backendConfigured)return <SetupScreen/>;
-  if(!authReady)return <NoticeScreen title="در حال آماده‌سازی ملکینو" message="وضعیت ورود بررسی می‌شود…"/>;
-  if(!session)return <LoginScreen email={loginEmail} setEmail={setLoginEmail} password={loginPassword} setPassword={setLoginPassword} busy={authBusy} error={authError} onSubmit={signIn}/>;
+  if(!localMode&&!backendConfigured)return <SetupScreen/>;
+  if(!localMode&&!authReady)return <NoticeScreen title="در حال آماده‌سازی ملکینو" message="وضعیت ورود بررسی می‌شود…"/>;
+  if(!localMode&&!session)return <LoginScreen email={loginEmail} setEmail={setLoginEmail} password={loginPassword} setPassword={setLoginPassword} busy={authBusy} error={authError} onSubmit={signIn}/>;
   return <div className="app-shell" dir="rtl">
     {mobileNav&&<button className="scrim" onClick={()=>setMobileNav(false)} aria-label="بستن منو"/>}
     <aside className={`sidebar ${mobileNav?'sidebar-open':''}`}>
@@ -165,35 +211,36 @@ function App(){
         {navSections.map(section=><div className="nav-group" key={section.label}><div className="nav-label">{section.label}</div>{section.items.map(([label,Icon]:any)=><button key={label} className={`nav-item ${view===titleToView[label]?'active':''}`} onClick={()=>selectView(titleToView[label])}><Icon size={18} strokeWidth={1.8}/><span>{label}</span>{label==='فایل‌های املاک'&&<small className="nav-count">{fa(properties.filter(property=>property.status!=='بایگانی').length)}</small>}</button>)}</div>)}
         <div className="nav-group"><div className="nav-label">سازمان</div><button className="nav-item" disabled title="این بخش هنوز پیاده‌سازی نشده است"><ShieldCheck size={18}/><span>تیم و دسترسی‌ها</span></button><button className="nav-item" disabled title="این بخش هنوز پیاده‌سازی نشده است"><Settings2 size={18}/><span>تنظیمات آژانس</span></button></div>
       </div>
-      <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><CircleHelp size={17}/></div><div><b>به راهنمایی نیاز دارید؟</b><span>با تیم پشتیبانی صحبت کنید</span></div><ArrowUpLeft size={15}/></div><div className="profile"><div className="avatar avatar-lime">ن</div><div className="profile-text"><b>{session.user.user_metadata?.full_name||session.user.email}</b><span>حساب کاربری</span></div><button className="icon-button profile-more" aria-label="خروج از حساب" title="خروج از حساب" onClick={()=>void signOut()}><LogOut size={17}/></button></div></div>
+      <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><CircleHelp size={17}/></div><div><b>به راهنمایی نیاز دارید؟</b><span>{localMode?'اطلاعات فقط روی این دستگاه است':'با تیم پشتیبانی صحبت کنید'}</span></div><ArrowUpLeft size={15}/></div><div className="profile"><div className="avatar avatar-lime">{currentUserName.slice(0,1)}</div><div className="profile-text"><b>{currentUserName}</b><span>{localMode?'فضای محلی مرورگر':'حساب کاربری'}</span></div>{!localMode&&<button className="icon-button profile-more" aria-label="خروج از حساب" title="خروج از حساب" onClick={()=>void signOut()}><LogOut size={17}/></button>}</div></div>
     </aside>
     <main className="main-area">
       <header className="topbar"><button className="mobile-menu icon-button" onClick={()=>setMobileNav(true)} aria-label="باز کردن منو"><Menu size={20}/></button><div className="breadcrumb"><span>ملکینو</span><ChevronLeft size={14}/><b>{view==='dashboard'?'نمای کلی':Object.keys(titleToView).find(k=>titleToView[k]===view)}</b></div>
-        <div className="top-actions"><span className={`demo-pill ${apiConnection==='connected'?'connected-pill':''}`} title={backendError}>{apiConnection==='checking'?'در حال اتصال…':apiConnection==='connected'?'اتصال API برقرار':'خطا در اتصال API'}</span><button className="global-search" onClick={()=>document.getElementById('global-search')?.focus()}><Search size={17}/><input id="global-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجو در ملکینو..."/><kbd><Command size={11}/> K</kbd></button><button className="top-icon" aria-label="راهنما" title="راهنمای استفاده در حال آماده‌سازی است" disabled><CircleHelp size={18}/></button><button className="top-icon" aria-label="همگام‌سازی فایل‌ها" title="همگام‌سازی فایل‌ها" onClick={refreshCurrentView}><Activity size={18}/></button><div className="top-divider"/><div className="date-chip"><CalendarDays size={16}/><span>{new Intl.DateTimeFormat('fa-IR',{dateStyle:'full'}).format(new Date())}</span></div></div>
+        <div className="top-actions"><span className={`demo-pill ${apiConnection==='connected'?'connected-pill':apiConnection==='local'?'local-pill':''}`} title={localMode?'ذخیره‌سازی فقط در همین مرورگر؛ بدون حساب کاربری یا همگام‌سازی':backendError}>{localMode?'ذخیره محلی':apiConnection==='checking'?'در حال اتصال…':apiConnection==='connected'?'اتصال API برقرار':'خطا در اتصال API'}</span><button className="global-search" onClick={()=>document.getElementById('global-search')?.focus()}><Search size={17}/><input id="global-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجو در ملکینو..."/><kbd><Command size={11}/> K</kbd></button><button className="top-icon" aria-label="راهنما" title="راهنمای استفاده در حال آماده‌سازی است" disabled><CircleHelp size={18}/></button><button className="top-icon" aria-label="همگام‌سازی فایل‌ها" title={localMode?'بازخوانی اطلاعات همین مرورگر':'همگام‌سازی فایل‌ها'} onClick={refreshCurrentView}><Activity size={18}/></button><div className="top-divider"/><div className="date-chip"><CalendarDays size={16}/><span>{new Intl.DateTimeFormat('fa-IR',{dateStyle:'full'}).format(new Date())}</span></div></div>
       </header>
       <div className="page-content">
+        {localMode&&<div className="local-storage-warning" role="note"><div><b>فضای محلی همین مرورگر — بدون حساب یا کنترل دسترسی</b><span>اطلاعات فقط روی این دستگاه ذخیره می‌شود و با افراد یا دستگاه‌های دیگر همگام نیست. هر فردی که به همین پروفایل مرورگر دسترسی داشته باشد ممکن است داده‌ها را ببیند. پاک‌کردن داده‌های مرورگر ممکن است آن‌ها را حذف کند؛ رمزنگاری ویژه یا پشتیبان ابری وجود ندارد. اطلاعات مالی محرمانه و اسناد حساس را وارد نکنید.</span></div></div>}
         {view!=='dashboard'&&backendError&&<div className="backend-error" role="alert">{backendError}<button onClick={refreshCurrentView}>تلاش دوباره</button></div>}
-        {view==='dashboard'?<Dashboard properties={properties} loading={loadingProperties} error={backendError} followUpError={followUpError} followUps={followUps} loadingFollowUps={loadingFollowUps} onRefresh={refreshDashboard} onCompleteFollowUp={item=>void updateFollowUpStatus(item,'complete')} onCreate={openCreate} onView={selectView}/>:view==='customers'?<CustomersPage customers={customers} properties={properties} loading={loadingCustomers} search={query} setSearch={setQuery} onCreate={openNewCustomer} onEdit={customer=>{setEditingCustomer(customer);setCustomerModal(true)}} onArchive={archiveCustomer} onFollowUp={customer=>{setFollowUpCustomerId(customer.id);selectView('calendar')}}/>:view==='calendar'?<FollowUpsPage items={followUps} customers={customers} properties={properties} loading={loadingFollowUps} saving={savingFollowUp} error={followUpError} onRefresh={()=>void refreshFollowUps(session)} presetCustomerId={followUpCustomerId} onPresetConsumed={()=>setFollowUpCustomerId('')} onCreate={createFollowUp} onComplete={item=>void updateFollowUpStatus(item,'complete')} onCancel={item=>void updateFollowUpStatus(item,'cancel')} onCustomers={()=>selectView('customers')}/>:view==='transactions'?<TransactionsPage userId={session.user.id} customers={customers} properties={properties}/>:view==='documents'?<DocumentsPage userId={session.user.id} customers={customers} properties={properties}/>:view==='finance'?<FinancePage userId={session.user.id} customers={customers} properties={properties}/>:view==='reports'?<ReportsPage userId={session.user.id} properties={properties} customers={customers} followUps={followUps} loading={loadingProperties||loadingCustomers||loadingFollowUps} followUpError={followUpError}/>:<ModulePage view={view} properties={filtered} allProperties={properties} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onCreate={openCreate} onEdit={openEdit} onArchive={toggleArchive} onExport={exportCsv} onNotify={notify}/> }
+        {view==='dashboard'?<Dashboard properties={properties} loading={loadingProperties} error={backendError} followUpError={followUpError} followUps={followUps} loadingFollowUps={loadingFollowUps} onRefresh={refreshDashboard} onCompleteFollowUp={item=>void updateFollowUpStatus(item,'complete')} onCreate={openCreate} onView={selectView} localMode={localMode}/>:view==='customers'?<CustomersPage customers={customers} properties={properties} loading={loadingCustomers} search={query} setSearch={setQuery} onCreate={openNewCustomer} onEdit={customer=>{setEditingCustomer(customer);setCustomerModal(true)}} onArchive={archiveCustomer} onFollowUp={customer=>{setFollowUpCustomerId(customer.id);selectView('calendar')}}/>:view==='calendar'?<FollowUpsPage items={followUps} customers={customers} properties={properties} loading={loadingFollowUps} saving={savingFollowUp} error={followUpError} onRefresh={()=>void refreshFollowUps(session)} presetCustomerId={followUpCustomerId} onPresetConsumed={()=>setFollowUpCustomerId('')} onCreate={createFollowUp} onComplete={item=>void updateFollowUpStatus(item,'complete')} onCancel={item=>void updateFollowUpStatus(item,'cancel')} onCustomers={()=>selectView('customers')}/>:view==='transactions'?<TransactionsPage userId={currentUserId} customers={customers} properties={properties}/>:view==='documents'?<DocumentsPage userId={currentUserId} customers={customers} properties={properties}/>:view==='finance'?<FinancePage userId={currentUserId} customers={customers} properties={properties}/>:view==='reports'?<ReportsPage userId={currentUserId} properties={properties} customers={customers} followUps={followUps} loading={loadingProperties||loadingCustomers||loadingFollowUps} followUpError={followUpError}/>:<ModulePage view={view} properties={filtered} allProperties={properties} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onCreate={openCreate} onEdit={openEdit} onArchive={toggleArchive} onExport={exportCsv} onNotify={notify}/> }
       </div>
     </main>
-    {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(false)}}><form className="modal" role="dialog" aria-modal="true" aria-labelledby="property-modal-title" onSubmit={saveProperty}><div className="modal-head"><div><span className="eyebrow">مدیریت فایلینگ</span><h2 id="property-modal-title">{editingCode?`ویرایش فایل ${properties.find(p=>p.id===editingCode)?.code||''}`:'ثبت فایل ملک جدید'}</h2><p>اطلاعات فایل در پایگاه داده آژانس ثبت می‌شود.</p></div><button type="button" className="icon-button" aria-label="بستن فرم ملک" onClick={()=>setModal(false)}><X size={19}/></button></div><div className="form-grid"><label className="field full">عنوان فایل<input autoFocus placeholder="مثلاً آپارتمان نورگیر در زعفرانیه" required maxLength={160} value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label><label className="field full">محدوده و نشانی<input placeholder="محله، خیابان اصلی" required maxLength={500} value={form.area} onChange={e=>setForm({...form,area:e.target.value})}/></label><label className="field">نوع ملک<select required value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option value="APARTMENT">آپارتمان</option><option value="VILLA">ویلا</option><option value="LAND">زمین</option><option value="COMMERCIAL">تجاری</option><option value="OFFICE">اداری</option><option value="OTHER">سایر</option></select></label><label className="field">نوع معامله<select required value={form.transaction} onChange={e=>setForm({...form,transaction:e.target.value,price:'',deposit:'',monthlyRent:''})}><option value="SALE">فروش</option><option value="RENT">اجاره</option><option value="MORTGAGE_RENT">رهن و اجاره</option><option value="EXCHANGE">معاوضه</option><option value="OTHER">سایر / توافقی</option></select></label><label className="field">متراژ (متر مربع)<input inputMode="decimal" required placeholder="۱۴۰" value={form.size} onChange={e=>setForm({...form,size:e.target.value})}/></label><label className="field">تعداد اتاق<input inputMode="numeric" placeholder="۳" value={form.beds} onChange={e=>setForm({...form,beds:e.target.value})}/></label>{editingCode&&<label className="field">وضعیت فایل<select value={form.status||'ACTIVE'} onChange={e=>setForm({...form,status:e.target.value})}><option value="ACTIVE">فعال</option><option value="UNDER_VISIT">در بازدید</option><option value="NEGOTIATING">در مذاکره</option></select></label>}{['SALE','RENT','MORTGAGE_RENT'].includes(form.transaction||'SALE')&&<label className="field">واحد پول<select value={form.currency} onChange={e=>setForm({...form,currency:e.target.value})}><option value="IRT">تومان</option><option value="IRR">ریال</option></select></label>}{form.transaction==='SALE'&&<label className="field">قیمت فروش (عدد کامل)<input inputMode="numeric" required placeholder="مثلاً ۱۸۰۰۰۰۰۰۰۰۰" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></label>}{form.transaction==='RENT'&&<label className="field">اجاره ماهانه (عدد کامل)<input inputMode="numeric" required value={form.monthlyRent} onChange={e=>setForm({...form,monthlyRent:e.target.value})}/></label>}{form.transaction==='MORTGAGE_RENT'&&<><label className="field">مبلغ ودیعه<input inputMode="numeric" required value={form.deposit} onChange={e=>setForm({...form,deposit:e.target.value})}/></label><label className="field">اجاره ماهانه<input inputMode="numeric" required value={form.monthlyRent} onChange={e=>setForm({...form,monthlyRent:e.target.value})}/></label></>}</div><div className="modal-foot"><button type="button" className="btn-secondary" onClick={()=>setModal(false)}>انصراف</button><button className="btn-primary" disabled={loadingProperties||savingProperty}>{savingProperty?'در حال ذخیره…':<>{editingCode?<Pencil size={16}/>:<Plus size={16}/>} {editingCode?'ذخیره تغییرات':'ثبت فایل ملک'}</>}</button></div></form></div>}
+    {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(false)}}><form className="modal" role="dialog" aria-modal="true" aria-labelledby="property-modal-title" onSubmit={saveProperty}><div className="modal-head"><div><span className="eyebrow">مدیریت فایلینگ</span><h2 id="property-modal-title">{editingCode?`ویرایش فایل ${properties.find(p=>p.id===editingCode)?.code||''}`:'ثبت فایل ملک جدید'}</h2><p>{localMode?'اطلاعات فقط در مرورگر همین دستگاه ذخیره می‌شود.':'اطلاعات فایل در پایگاه داده آژانس ثبت می‌شود.'}</p></div><button type="button" className="icon-button" aria-label="بستن فرم ملک" onClick={()=>setModal(false)}><X size={19}/></button></div><div className="form-grid"><label className="field full">عنوان فایل<input autoFocus placeholder="مثلاً آپارتمان نورگیر در زعفرانیه" required maxLength={160} value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label><label className="field full">محدوده و نشانی<input placeholder="محله، خیابان اصلی" required maxLength={500} value={form.area} onChange={e=>setForm({...form,area:e.target.value})}/></label><label className="field">نوع ملک<select required value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option value="APARTMENT">آپارتمان</option><option value="VILLA">ویلا</option><option value="LAND">زمین</option><option value="COMMERCIAL">تجاری</option><option value="OFFICE">اداری</option><option value="OTHER">سایر</option></select></label><label className="field">نوع معامله<select required value={form.transaction} onChange={e=>setForm({...form,transaction:e.target.value,price:'',deposit:'',monthlyRent:''})}><option value="SALE">فروش</option><option value="RENT">اجاره</option><option value="MORTGAGE_RENT">رهن و اجاره</option><option value="EXCHANGE">معاوضه</option><option value="OTHER">سایر / توافقی</option></select></label><label className="field">متراژ (متر مربع)<input inputMode="decimal" required placeholder="۱۴۰" value={form.size} onChange={e=>setForm({...form,size:e.target.value})}/></label><label className="field">تعداد اتاق<input inputMode="numeric" placeholder="۳" value={form.beds} onChange={e=>setForm({...form,beds:e.target.value})}/></label>{editingCode&&<label className="field">وضعیت فایل<select value={form.status||'ACTIVE'} onChange={e=>setForm({...form,status:e.target.value})}><option value="ACTIVE">فعال</option><option value="UNDER_VISIT">در بازدید</option><option value="NEGOTIATING">در مذاکره</option></select></label>}{['SALE','RENT','MORTGAGE_RENT'].includes(form.transaction||'SALE')&&<label className="field">واحد پول<select value={form.currency} onChange={e=>setForm({...form,currency:e.target.value})}><option value="IRT">تومان</option><option value="IRR">ریال</option></select></label>}{form.transaction==='SALE'&&<label className="field">قیمت فروش (عدد کامل)<input inputMode="numeric" required placeholder="مثلاً ۱۸۰۰۰۰۰۰۰۰۰" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></label>}{form.transaction==='RENT'&&<label className="field">اجاره ماهانه (عدد کامل)<input inputMode="numeric" required value={form.monthlyRent} onChange={e=>setForm({...form,monthlyRent:e.target.value})}/></label>}{form.transaction==='MORTGAGE_RENT'&&<><label className="field">مبلغ ودیعه<input inputMode="numeric" required value={form.deposit} onChange={e=>setForm({...form,deposit:e.target.value})}/></label><label className="field">اجاره ماهانه<input inputMode="numeric" required value={form.monthlyRent} onChange={e=>setForm({...form,monthlyRent:e.target.value})}/></label></>}</div><div className="modal-foot"><button type="button" className="btn-secondary" onClick={()=>setModal(false)}>انصراف</button><button className="btn-primary" disabled={loadingProperties||savingProperty}>{savingProperty?'در حال ذخیره…':<>{editingCode?<Pencil size={16}/>:<Plus size={16}/>} {editingCode?'ذخیره تغییرات':'ثبت فایل ملک'}</>}</button></div></form></div>}
     {customerModal&&<CustomerForm customer={editingCustomer} busy={savingCustomer} onClose={()=>{setCustomerModal(false);setEditingCustomer(null)}} onSave={saveCustomer}/>}
     {toast&&<div className={`toast ${toastIsError?'toast-error':''}`} role={toastIsError?'alert':'status'}><span className="toast-check">{toastIsError?<X size={15}/>:<Check size={15}/>}</span>{toast}</div>}
   </div>
 }
 
-function Dashboard({properties,loading,error,followUpError,followUps,loadingFollowUps,onRefresh,onCompleteFollowUp,onCreate,onView}:{properties:Property[];loading:boolean;error:string;followUpError:string;followUps:FollowUpView[];loadingFollowUps:boolean;onRefresh:()=>void;onCompleteFollowUp:(item:FollowUpView)=>void;onCreate:()=>void;onView:(v:string)=>void}){
+function Dashboard({properties,loading,error,followUpError,followUps,loadingFollowUps,onRefresh,onCompleteFollowUp,onCreate,onView,localMode}:{properties:Property[];loading:boolean;error:string;followUpError:string;followUps:FollowUpView[];loadingFollowUps:boolean;onRefresh:()=>void;onCompleteFollowUp:(item:FollowUpView)=>void;onCreate:()=>void;onView:(v:string)=>void;localMode:boolean}){
  const active=properties.filter(p=>p.status==='فعال').length;
  const visits=properties.filter(p=>p.status==='بازدید').length;
  const negotiating=properties.filter(p=>p.status==='در مذاکره').length;
  const upcoming=followUps.filter(item=>item.status==='OPEN').sort((a,b)=>new Date(a.dueAt).getTime()-new Date(b.dueAt).getTime()).slice(0,4);
  return <>
-  <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/> نمای کلی آژانس</div><h1>نمای کلی ملکینو</h1><p>آمار بر اساس فایل‌های ثبت‌شده در پایگاه داده شماست.</p></div><div className="welcome-actions"><button className="btn-secondary" onClick={onRefresh}><Activity size={16}/> همگام‌سازی</button><button className="btn-primary" onClick={onCreate}><Plus size={17}/> ثبت فایل جدید</button></div></div>
+  <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/> نمای کلی آژانس</div><h1>نمای کلی ملکینو</h1><p>{localMode?'آمار بر اساس اطلاعات ذخیره‌شده در همین مرورگر است.':'آمار بر اساس فایل‌های ثبت‌شده در پایگاه داده شماست.'}</p></div><div className="welcome-actions"><button className="btn-secondary" onClick={onRefresh}><Activity size={16}/> {localMode?'بازخوانی':'همگام‌سازی'}</button><button className="btn-primary" onClick={onCreate}><Plus size={17}/> ثبت فایل جدید</button></div></div>
   {error&&<div className="backend-error" role="alert">{error}<button onClick={onRefresh}>تلاش دوباره</button></div>}
   <section className="stats-grid"><StatCard icon={Building2} iconTone="green" label="کل فایل‌ها" value={fa(properties.length)}/><StatCard icon={CheckCheck} iconTone="blue" label="فایل‌های فعال" value={fa(active)}/><StatCard icon={Eye} iconTone="orange" label="در بازدید" value={fa(visits)}/><StatCard icon={BriefcaseBusiness} iconTone="purple" label="در مذاکره" value={fa(negotiating)}/></section>
-  <section className="panel properties-panel real-dashboard-properties"><div className="panel-head"><div><h2>آخرین فایل‌های ثبت‌شده</h2><p>{loading?'در حال دریافت اطلاعات…':'فایل‌های پایگاه داده آژانس شما'}</p></div><button className="text-link" onClick={()=>onView('properties')}>مدیریت فایل‌ها <ArrowLeft size={15}/></button></div>{properties.length?<div className="table-wrap"><table><thead><tr><th>ملک</th><th>متراژ / اتاق</th><th>قیمت پیشنهادی</th><th>وضعیت</th><th>مشاور</th></tr></thead><tbody>{properties.slice(0,5).map(p=><PropertyRow key={p.id||p.code} property={p} onClick={()=>onView('properties')}/>)}</tbody></table></div>:<div className="empty-state"><Building2 size={30}/><b>{loading?'در حال بارگذاری فایل‌ها':error?'فایل‌ها در دسترس نیستند':'هنوز فایلی ثبت نشده است'}</b><span>{loading||error?'':'برای شروع، اولین فایل آژانس را ثبت کنید.'}</span>{!loading&&!error&&<button className="btn-primary" onClick={onCreate}><Plus size={16}/> ثبت فایل اول</button>}</div>}</section>
+  <section className="panel properties-panel real-dashboard-properties"><div className="panel-head"><div><h2>آخرین فایل‌های ثبت‌شده</h2><p>{loading?'در حال دریافت اطلاعات…':localMode?'فایل‌های ذخیره‌شده روی این دستگاه':'فایل‌های پایگاه داده آژانس شما'}</p></div><button className="text-link" onClick={()=>onView('properties')}>مدیریت فایل‌ها <ArrowLeft size={15}/></button></div>{properties.length?<div className="table-wrap"><table><thead><tr><th>ملک</th><th>متراژ / اتاق</th><th>قیمت پیشنهادی</th><th>وضعیت</th><th>مشاور</th></tr></thead><tbody>{properties.slice(0,5).map(p=><PropertyRow key={p.id||p.code} property={p} onClick={()=>onView('properties')}/>)}</tbody></table></div>:<div className="empty-state"><Building2 size={30}/><b>{loading?'در حال بارگذاری فایل‌ها':error?'فایل‌ها در دسترس نیستند':'هنوز فایلی ثبت نشده است'}</b><span>{loading||error?'':'برای شروع، اولین فایل آژانس را ثبت کنید.'}</span>{!loading&&!error&&<button className="btn-primary" onClick={onCreate}><Plus size={16}/> ثبت فایل اول</button>}</div>}</section>
   <section className="panel dashboard-followups"><div className="panel-head"><div><h2><CalendarClock size={16}/> پیگیری‌های پیش‌رو</h2><p>نزدیک‌ترین کارهای باز CRM</p></div><button className="text-link" onClick={()=>onView('calendar')}>همه پیگیری‌ها <ArrowLeft size={15}/></button></div>{followUpError?<div className="dashboard-followup-empty followup-error-message"><span>{followUpError}</span><button onClick={onRefresh}>تلاش دوباره</button></div>:upcoming.length?<div className="dashboard-followup-list">{upcoming.map(item=><div className="dashboard-followup-item" key={item.id}><span className={`followup-type-icon followup-${item.kind.toLowerCase()}`}>{item.kind==='CALL'?<Phone size={15}/>:item.kind==='PROPERTY_VISIT'?<MapPin size={15}/>:item.kind==='MEETING'?<Users size={15}/>:<Clock3 size={15}/>}</span><div className="dashboard-followup-copy"><b>{item.title}</b><span>{item.customerName} <i/> {item.kindLabel} <i/> {item.dueLabel}</span></div><button className="complete-followup" onClick={()=>onCompleteFollowUp(item)} aria-label={`تکمیل ${item.title}`} title="ثبت انجام پیگیری"><Check size={15}/><span>انجام شد</span></button></div>)}</div>:<div className="dashboard-followup-empty"><CalendarClock size={22}/><span>{loadingFollowUps?'در حال دریافت پیگیری‌ها…':'پیگیری باز برای نمایش وجود ندارد.'}</span><button onClick={()=>onView('calendar')}>رفتن به تقویم و پیگیری</button></div>}</section>
-  <div className="footer-note"><span>ملکینو <i/> اطلاعات از پایگاه داده آژانس بارگذاری می‌شود</span><span>{new Intl.DateTimeFormat('fa-IR',{dateStyle:'short',timeStyle:'short'}).format(new Date())}</span></div>
+  <div className="footer-note"><span>ملکینو <i/> {localMode?'اطلاعات فقط روی همین دستگاه نگهداری می‌شود':'اطلاعات از پایگاه داده آژانس بارگذاری می‌شود'}</span><span>{new Intl.DateTimeFormat('fa-IR',{dateStyle:'short',timeStyle:'short'}).format(new Date())}</span></div>
  </>
 }
 function StatCard({icon:Icon,iconTone,label,value}:any){return <div className="stat-card"><div className="stat-top"><span className={`stat-icon ${iconTone}`}><Icon size={19}/></span></div><div className="stat-label">{label}</div><div className="stat-value">{value}</div><div className="stat-foot"><span>از داده‌های ثبت‌شده</span></div></div>}
