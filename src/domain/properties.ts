@@ -20,6 +20,7 @@ export type Property = {
   deposit?: string | null;
   monthlyRent?: string | null;
   apiStatus?: string;
+  createdAt?: string;
 };
 export type PropertyDraft = {
   title: string;

@@ -114,5 +114,6 @@ export function mapProperty(row: ApiProperty, currentUserId?: string, currentUse
     deposit: row.deposit,
     monthlyRent: row.monthlyRent,
     apiStatus: row.status,
+    createdAt: row.createdAt,
   };
 }
