@@ -1,0 +1,3 @@
+# Melkino's Vercel deployment is a static public preview only.
+# Do not bundle NestJS backend sources as Vercel serverless functions.
+api/
