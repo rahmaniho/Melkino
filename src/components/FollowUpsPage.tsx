@@ -26,7 +26,7 @@ export function FollowUpsPage({items,customers,properties,loading,saving,error,o
  {!filtered.length&&<div className="empty-state"><CalendarClock size={30}/><b>{loading?'در حال دریافت پیگیری‌ها…':items.length?'پیگیری‌ای در این فیلتر نیست':'هنوز پیگیری ثبت نشده است'}</b><span>{loading?'':customers.length?'برای برنامه‌ریزی، پیگیری جدید ثبت کنید.':'ابتدا یک مشتری در دفتر مشتریان ثبت کنید.'}</span>{!loading&&(customers.length?<button className="btn-primary" onClick={openForm}><Plus size={15}/> ثبت اولین پیگیری</button>:<button className="btn-primary" onClick={onCustomers}><UserRound size={15}/> رفتن به دفتر مشتریان</button>)}</div>}
  </div><div className="table-pagination"><span>نمایش {fa(filtered.length)} از {fa(items.length)} پیگیری</span><span>زمان نمایش بر اساس منطقه زمانی دستگاه شماست.</span></div></section>
  {formOpen&&<FollowUpForm customers={customers} properties={properties} initialCustomerId={formCustomerId} busy={saving} onClose={()=>{setFormOpen(false);setFormCustomerId('')}} onSave={async draft=>{const saved=await onCreate(draft);if(saved){setFormOpen(false);setFormCustomerId('')}return saved}}/>}
- <div className="footer-note"><span>ملکینو <i/> هر پیگیری به یک مشتری متصل و در API ثبت می‌شود.</span><span>یادآوری خودکار/اعلان هنوز فعال نیست.</span></div>
+ <div className="footer-note"><span>ملکینو <i/> هر پیگیری به مشتری مرتبط متصل می‌شود.</span><span>یادآوری خودکار/اعلان هنوز فعال نیست.</span></div>
  </>
 }
 
